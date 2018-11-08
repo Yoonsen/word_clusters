@@ -52,15 +52,18 @@ def urn_from_text(T):
     """Return URNs as 13 digits (any sequence of 13 digits is counted as an URN)"""
     return re.findall("(?<=digibok_)[0-9]{13}", T)
 
-def metadata(urn="""text"""):
+def metadata(urn=[]):
     if type(urn) is str:
-        urns = urn
+        urns = urn.split()
     elif type(urn) is list:
-        urns = '-'.join([str(u) for u in urn])
+        if isinstance(urn[0], list):
+            urns = [u[0] for u in urns]
+        else:
+            urns = urn
     else:
-        urns = str(urn)
-        
-    r = requests.get("https://api.nb.no/ngram/meta", params={'urn':urns})
+        urns = [urn]
+    #print(urns)
+    r = requests.post("https://api.nb.no/ngram/meta", json={'urn':urns})
     return r.json()
 
 
@@ -185,30 +188,33 @@ def urn_coll(word, urns=[], after=5, before=5, limit=1000):
     return pd.DataFrame.from_dict(r.json(), orient='index').sort_values(by=0, ascending = False)
 
 
-def urn_coll_words(words, urns=[], after=5, before=5, limit=1000):
+def urn_coll_words(words, urns=None, after=5, before=5, limit=1000):
     """Find collocations for a group of words within a set of books given by a list of URNs. Only books at the moment"""
-    if isinstance(urns[0], list):  # urns assumed to be list of list with urn-serial as first element
-        urns = [u[0] for u in urns]
-    colls = Counter()
-    if isinstance(words, str):
-        words = words.split()
-    res = Counter()
-    for word in words: 
-        try:
-            res += Counter(
-                requests.post(
-                    "https://api.nb.no/ngram/urncoll", 
-                    json={
-                        'word':word, 
-                        'urns':urns, 
-                        'after':after, 
-                        'before':before, 
-                        'limit':limit}
-                ).json()
-            )
-        except:
-            True
-    return pd.DataFrame.from_dict(res, orient='index').sort_values(by=0, ascending = False)
+    coll = pd.DataFrame()
+    if urns != None:
+        if isinstance(urns[0], list):  # urns assumed to be list of list with urn-serial as first element
+            urns = [u[0] for u in urns]
+        colls = Counter()
+        if isinstance(words, str):
+            words = words.split()
+        res = Counter()
+        for word in words: 
+            try:
+                res += Counter(
+                    requests.post(
+                        "https://api.nb.no/ngram/urncoll", 
+                        json={
+                            'word':word, 
+                            'urns':urns, 
+                            'after':after, 
+                            'before':before, 
+                            'limit':limit}
+                    ).json()
+                )
+            except:
+                True
+        coll = pd.DataFrame.from_dict(res, orient='index')
+    return coll.sort_values(by=coll.columns[0], ascending = False)
 
 
 def get_aggregated_corpus(urns, top=0, cutoff=0):
