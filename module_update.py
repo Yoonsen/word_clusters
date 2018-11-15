@@ -1,18 +1,34 @@
 import requests
-from IPython.display import HTML
+import os
+from IPython.display import HTML, Markdown, display
 from urllib.parse import urlparse, urljoin
 
-def update(module=""):
+
+def printmd(S):
+    display(Markdown(S))
+    return
+
+def update(module="", overwrite=False, silent=False):
     """Fetch modules from Github and write them to folder"""
-    nba = requests.get("https://raw.githubusercontent.com/Yoonsen/Modules/master/{module}.py".format(module=module))
-    
+    nba = requests.get(
+        "https://raw.githubusercontent.com/Yoonsen/Modules/master/{module}.py".format(module=module),
+        headers={'Cache-Control': 'no-cache'}
+        )
+    filename = '{m}.py'.format(m=module)
     if nba.status_code == 200:
-        nba = nba.text
-        with open('{m}.py'.format(m=module),'w', encoding='UTF-8') as pyfile:
-            pyfile.write(nba)
-        print("Updated file {module}.py".format(module=module))
+        file_exists = os.path.exists(filename)
+        if file_exists and not(overwrite):
+            if not silent:
+                printmd("File {f} exists - call `update('{m}', overwrite = True)` in order to download module `{m}` anyway".format(f = os.path.abspath(filename), m = module))
+        else:
+            nba = nba.text
+            with open(filename,'w', encoding='UTF-8') as pyfile:
+                pyfile.write(nba)
+                pyfile.flush()
+            if not silent:
+                printmd("Updated file `{module}.py`".format(module= os.path.abspath(module)))
     else:
-        print("An error occured ", module, nba.status_code)
+        printmd("An error occured during download", module, nba.status_code)
     return
 
 def css(url = "https://raw.githubusercontent.com/Yoonsen/Modules/master/css_style_sheets/nb_notebook.css"):
@@ -40,4 +56,4 @@ def css(url = "https://raw.githubusercontent.com/Yoonsen/Modules/master/css_styl
     
     return HTML("<style>{css_code}</style>".format(css_code = css_file))
 
-update("nbtext")
+update("nbtext", silent=True)

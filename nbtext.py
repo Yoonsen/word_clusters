@@ -48,19 +48,26 @@ def navn(urn):
     r = requests.get('https://api.nb.no/ngram/tingnavn', json={'urn':urn})
     return dict(r.json())
     
-def urn_from_text(T):
+def digibokurn_from_text(T):
     """Return URNs as 13 digits (any sequence of 13 digits is counted as an URN)"""
     return re.findall("(?<=digibok_)[0-9]{13}", T)
 
-def metadata(urn="""text"""):
+def urn_from_text(T):
+    """Return URNs as 13 digits (any sequence of 13 digits is counted as an URN)"""
+    return re.findall("[0-9]{13}", T)
+
+def metadata(urn=[]):
     if type(urn) is str:
-        urns = urn
+        urns = urn.split()
     elif type(urn) is list:
-        urns = '-'.join([str(u) for u in urn])
+        if isinstance(urn[0], list):
+            urns = [u[0] for u in urns]
+        else:
+            urns = urn
     else:
-        urns = str(urn)
-        
-    r = requests.get("https://api.nb.no/ngram/meta", params={'urn':urns})
+        urns = [urn]
+    #print(urns)
+    r = requests.post("https://api.nb.no/ngram/meta", json={'urn':urns})
     return r.json()
 
 
@@ -73,19 +80,22 @@ def pure_urn(data):
         List[str]: A list of URNs. Empty list if input is on the wrong
             format or contains no URNs
     """
+    korpus_def = []
     if isinstance(data, list):
         if not data:  # Empty list
-            return []
+            korpus_def = []
         if isinstance(data[0], list):  # List of lists
             try:
-                return [x[0] for x in data]
+                korpus_def = [x[0] for x in data]
             except IndexError:
-                return []
+                korpus_def = []
         else:  # Assume data is already a list of URNs
-            return data
+            korpus_def = data
     elif isinstance(data, str):
-        return urn_from_text(data)
-    return []
+        korpus_def = urn_from_text(data)
+    elif isinstance(data, int):
+        korpus_def = [data]
+    return korpus_def
 
 
 def difference(first, second, rf, rs, years=(1980, 2000),smooth=1, corpus='bok'):
@@ -185,30 +195,33 @@ def urn_coll(word, urns=[], after=5, before=5, limit=1000):
     return pd.DataFrame.from_dict(r.json(), orient='index').sort_values(by=0, ascending = False)
 
 
-def urn_coll_words(words, urns=[], after=5, before=5, limit=1000):
+def urn_coll_words(words, urns=None, after=5, before=5, limit=1000):
     """Find collocations for a group of words within a set of books given by a list of URNs. Only books at the moment"""
-    if isinstance(urns[0], list):  # urns assumed to be list of list with urn-serial as first element
-        urns = [u[0] for u in urns]
-    colls = Counter()
-    if isinstance(words, str):
-        words = words.split()
-    res = Counter()
-    for word in words: 
-        try:
-            res += Counter(
-                requests.post(
-                    "https://api.nb.no/ngram/urncoll", 
-                    json={
-                        'word':word, 
-                        'urns':urns, 
-                        'after':after, 
-                        'before':before, 
-                        'limit':limit}
-                ).json()
-            )
-        except:
-            True
-    return pd.DataFrame.from_dict(res, orient='index').sort_values(by=0, ascending = False)
+    coll = pd.DataFrame()
+    if urns != None:
+        if isinstance(urns[0], list):  # urns assumed to be list of list with urn-serial as first element
+            urns = [u[0] for u in urns]
+        colls = Counter()
+        if isinstance(words, str):
+            words = words.split()
+        res = Counter()
+        for word in words: 
+            try:
+                res += Counter(
+                    requests.post(
+                        "https://api.nb.no/ngram/urncoll", 
+                        json={
+                            'word':word, 
+                            'urns':urns, 
+                            'after':after, 
+                            'before':before, 
+                            'limit':limit}
+                    ).json()
+                )
+            except:
+                True
+        coll = pd.DataFrame.from_dict(res, orient='index')
+    return coll.sort_values(by=coll.columns[0], ascending = False)
 
 
 def get_aggregated_corpus(urns, top=0, cutoff=0):
@@ -290,6 +303,28 @@ def collocation_data(words, yearfrom = 2000, yearto = 2005, limit = 1000, before
         result = result.join(a[w], how='outer')
     return pd.DataFrame(result.sum(axis=1)).sort_values(by=0, ascending=False)
 
+class CollocationCorpus:
+    from random import sample
+    
+    def __init__(self, corpus = None, name='', maximum_texts = 500):
+        urns = pure_urn(corpus)
+        
+        if len(urns) > maximum_texts:      
+            selection = random(urns, maximum_texts)
+        else:
+            selection = urns
+            
+        self.corpus_def = selection
+        self.corpus = get_aggregated_corpus(self.corpus_def, top=0, cutoff=0)
+
+
+    def summary(self, head=10):
+        info = {
+            'corpus_definition':self.corpus[:head],
+            'number_of_words':len(self.corpus)
+            
+        }
+        return info
 
 def collocation_old(word, yearfrom=2010, yearto=2018, before=3, after=3, limit=1000, corpus='avis'):
     data =  requests.get(
