@@ -2,13 +2,55 @@ import requests
 import os
 from IPython.display import HTML, Markdown, display
 from urllib.parse import urlparse, urljoin
+import ipywidgets as widgets
 
 
+
+
+
+def code_toggle(button_text = "Klikk for å vise/skjule kodeceller"):
+    from IPython.display import HTML, display
+
+    display(
+        HTML(
+        '''<div>
+                <style>
+                 .mybutton {
+                    background-color: #4CAF50;
+                    border: none;
+                    color: white;
+                    padding: 10px 16px;
+                    text-align: center;
+                    text-decoration: none;
+                    display: inline-block;
+                    font-size: 16px;
+                    margin: 4px 2px;
+                    cursor: pointer;
+                }
+            </style>
+            <script>
+                code_show=true; 
+                function code_toggle() {
+                 if (code_show){
+                 $('div.input').hide();
+                 } else {
+                 $('div.input').show();
+                 }
+                 code_show = !code_show
+                } 
+                $( document ).ready(code_toggle);
+            </script>
+            <form  action="javascript:code_toggle()">
+                <input class='mybutton' type="submit" value=''' + '"'  + button_text + '"' + '''>
+            </form>
+        </div>'''
+        ))
+    
 def printmd(S):
     display(Markdown(S))
     return
 
-def update(module="", overwrite=False, silent=False):
+def update(module="", overwrite=True, silent=False):
     """Fetch modules from Github and write them to folder"""
     nba = requests.get(
         "https://raw.githubusercontent.com/Yoonsen/Modules/master/{module}.py".format(module=module),
@@ -28,7 +70,13 @@ def update(module="", overwrite=False, silent=False):
             if not silent:
                 printmd("Updated file `{module}.py`".format(module= os.path.abspath(module)))
     else:
-        printmd("An error occured during download", module, nba.status_code)
+        printmd( 
+            """{intro} for {module} with error {code}""".format(
+                intro = "An error occured during download", 
+                module = module, 
+                code= nba.status_code
+            )
+        )
     return
 
 def css(url = "https://raw.githubusercontent.com/Yoonsen/Modules/master/css_style_sheets/nb_notebook.css"):
@@ -56,4 +104,4 @@ def css(url = "https://raw.githubusercontent.com/Yoonsen/Modules/master/css_styl
     
     return HTML("<style>{css_code}</style>".format(css_code = css_file))
 
-update("nbtext", silent=True)
+update("nbtext", overwrite=False, silent=True)
